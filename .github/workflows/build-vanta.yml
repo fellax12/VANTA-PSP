@@ -3,16 +3,18 @@ name: Build VANTA PSP
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
-      - '.github/workflows/build-vanta.yml'
+      - ".github/workflows/build-vanta.yml"
 
 permissions:
   contents: read
 
 env:
-  PPSSPP_TAG: v1.20.4
-  ANDROID_NDK_VERSION: 29.0.14206865
+  PPSSPP_TAG: "v1.20.4"
+  ANDROID_NDK_VERSION: "29.0.14206865"
+  VANTA_LAYER_B64: "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"
 
 jobs:
   android-arm64:
@@ -24,60 +26,52 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Set up Java
+      - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android packages
+      - name: Install Android build packages
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            'platform-tools' \
-            'platforms;android-36' \
-            'build-tools;36.0.0' \
-            "ndk;${ANDROID_NDK_VERSION}" \
-            'cmake;3.22.1'
+          sdkmanager "platform-tools" "platforms;android-36" "build-tools;36.0.0" "ndk;${ANDROID_NDK_VERSION}" "cmake;3.22.1"
 
       - name: Materialize VANTA layer
         shell: bash
         run: |
+          set -euo pipefail
           mkdir -p vanta-layer
-          cat > /tmp/vanta-layer.b64 <<'VANTA_B64'
-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
-VANTA_B64
-          base64 -d /tmp/vanta-layer.b64 > /tmp/vanta-layer.tar.gz
+          printf '%s' "${VANTA_LAYER_B64}" | base64 --decode > /tmp/vanta-layer.tar.gz
           tar -xzf /tmp/vanta-layer.tar.gz -C vanta-layer
-          echo "VANTA build layer:"
+          test -f vanta-layer/scripts/apply_vanta.py
+          echo "VANTA layer ready."
           find vanta-layer -maxdepth 8 -type f -print
 
       - name: Fetch PPSSPP engine
         shell: bash
         run: |
-          git clone \
-            --branch "${PPSSPP_TAG}" \
-            --depth 1 \
-            --recurse-submodules \
-            --shallow-submodules \
-            https://github.com/hrydgard/ppsspp.git upstream
+          set -euo pipefail
+          git clone --branch "${PPSSPP_TAG}" --depth 1 --recurse-submodules --shallow-submodules https://github.com/hrydgard/ppsspp.git upstream
           git -C upstream submodule update --init --recursive --depth 1
 
       - name: Apply VANTA layer
         shell: bash
         run: |
+          set -euo pipefail
           python3 vanta-layer/scripts/apply_vanta.py upstream
 
       - name: Build optimized ARM64 APK
         shell: bash
         working-directory: upstream
         env:
-          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g"
         run: |
+          set -euo pipefail
           chmod +x gradlew
           ./gradlew :android:assembleNormalOptimized --no-daemon --stacktrace
 
@@ -86,14 +80,15 @@ VANTA_B64
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK="$(find upstream/android/build/outputs/apk -type f -name '*normal*optimized*.apk' | head -n 1)"
-          if [ -z "${APK}" ]; then
-            echo 'Optimized APK was not found.' >&2
-            find upstream/android/build/outputs -maxdepth 6 -type f || true
+          APK="$(find upstream/android/build/outputs/apk -type f -name "*.apk" | grep -i normal | grep -i optimized | head -n 1 || true)"
+          if [ -z "$APK" ]; then
+            echo "Optimized APK was not found." >&2
+            find upstream/android/build/outputs -maxdepth 8 -type f -print || true
             exit 1
           fi
-          cp "${APK}" dist/VANTA-PSP-arm64.apk
-          sha256sum dist/VANTA-PSP-arm64.apk | tee dist/VANTA-PSP-arm64.apk.sha256
+          cp "$APK" dist/VANTA-PSP-arm64.apk
+          sha256sum dist/VANTA-PSP-arm64.apk > dist/VANTA-PSP-arm64.apk.sha256
+          cat dist/VANTA-PSP-arm64.apk.sha256
 
       - name: Upload VANTA APK
         uses: actions/upload-artifact@v7
@@ -102,4 +97,3 @@ VANTA_B64
           path: dist/*
           if-no-files-found: error
           retention-days: 14
-          
