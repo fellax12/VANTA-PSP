@@ -1,10 +1,7 @@
-name: Build VANTA PSP
+name: Build VANTA PSP Unified
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
 
 permissions:
   contents: read
@@ -14,16 +11,17 @@ env:
   ANDROID_SDK_ROOT: "/usr/local/lib/android/sdk"
   ANDROID_HOME: "/usr/local/lib/android/sdk"
   ANDROID_NDK_VERSION: "29.0.14206865"
+  VANTA_VERSION_CODE: "120040100"
+  VANTA_VERSION_NAME: "0.9.0-rc1"
 
 jobs:
   android-arm64:
-    name: Android ARM64 optimized
+    name: VANTA Unified ARM64
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
     steps:
-
-      - name: Checkout repository
+      - name: Checkout VANTA repository
         uses: actions/checkout@v6
 
       - name: Set up Java 17
@@ -45,9 +43,13 @@ jobs:
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
 
           if [ ! -f "$SDKMANAGER" ]; then
-            echo "sdkmanager latest não encontrado, procurando outra versão..."
+            echo "sdkmanager latest não encontrado. Procurando versão instalada..."
 
-            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
+            SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" \
+              -type f \
+              -name sdkmanager \
+              | sort -V \
+              | tail -n 1)"
           fi
 
           if [ -z "$SDKMANAGER" ] || [ ! -f "$SDKMANAGER" ]; then
@@ -55,7 +57,7 @@ jobs:
             exit 1
           fi
 
-          echo "Usando:"
+          echo "sdkmanager:"
           echo "$SDKMANAGER"
 
           yes | "$SDKMANAGER" --licenses >/dev/null || true
@@ -64,33 +66,36 @@ jobs:
             "platform-tools" \
             "platforms;android-36" \
             "build-tools;36.0.0" \
-            "ndk;29.0.14206865" \
+            "ndk;${ANDROID_NDK_VERSION}" \
             "cmake;3.22.1"
 
+          echo ""
           echo "Android SDK pronto."
 
-          ls -la "$ANDROID_SDK_ROOT/ndk" || true
-          ls -la "$ANDROID_SDK_ROOT/cmake" || true
-
-      - name: Verify VANTA package
+      - name: Verify VANTA final package
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Arquivos na raiz:"
-          ls -la
+          echo "Arquivos presentes no repositório:"
+          ls -lah
 
-          if [ ! -f "VANTA-PSP-v0.1-upload.zip" ]; then
+          if [ ! -f "VANTA-PSP-final.zip" ]; then
             echo ""
             echo "ERRO:"
-            echo "O arquivo VANTA-PSP-v0.1-upload.zip não está na raiz do repositório."
-            echo ""
+            echo "VANTA-PSP-final.zip não foi encontrado na raiz."
             exit 1
           fi
 
-          echo "Pacote VANTA encontrado."
+          echo ""
+          echo "Testando integridade do ZIP..."
 
-      - name: Extract VANTA layer
+          unzip -t "VANTA-PSP-final.zip"
+
+          echo ""
+          echo "ZIP íntegro."
+
+      - name: Extract VANTA source layer
         shell: bash
         run: |
           set -euo pipefail
@@ -98,21 +103,42 @@ jobs:
           rm -rf vanta-package
           mkdir -p vanta-package
 
-          unzip -q "VANTA-PSP-v0.1-upload.zip" -d vanta-package
+          unzip -q "VANTA-PSP-final.zip" -d vanta-package
 
-          echo "Conteúdo extraído:"
-          find vanta-package -maxdepth 8 -type f -print
+          echo "Conteúdo VANTA:"
+          find vanta-package \
+            -maxdepth 10 \
+            -type f \
+            -print
 
-          test -f "vanta-package/VANTA-PSP-upload/scripts/apply_vanta.py"
+          test -f \
+            "vanta-package/VANTA-PSP-final/scripts/apply_vanta.py"
 
-          echo "VANTA layer pronta."
+          test -f \
+            "vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaActivity.java"
 
-      - name: Fetch PPSSPP engine
+          test -f \
+            "vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaPrefs.java"
+
+          echo ""
+          echo "Estrutura VANTA encontrada."
+
+      - name: Validate VANTA patcher
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Baixando PPSSPP ${PPSSPP_TAG}..."
+          python3 -m py_compile \
+            vanta-package/VANTA-PSP-final/scripts/apply_vanta.py
+
+          echo "Patcher Python válido."
+
+      - name: Fetch PPSSPP 1.20.4 engine
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Clonando PPSSPP ${PPSSPP_TAG}..."
 
           git clone \
             --branch "$PPSSPP_TAG" \
@@ -122,45 +148,108 @@ jobs:
             https://github.com/hrydgard/ppsspp.git \
             upstream
 
-          echo "Atualizando submódulos..."
+          echo ""
+          echo "Garantindo submódulos..."
 
           git -C upstream submodule update \
             --init \
             --recursive \
             --depth 1
 
-          echo "Engine pronta."
+          echo ""
+          echo "PPSSPP ${PPSSPP_TAG} pronto."
 
-      - name: Apply VANTA layer
+      - name: Apply VANTA Unified layer
         shell: bash
         run: |
           set -euo pipefail
 
           python3 \
-            vanta-package/VANTA-PSP-upload/scripts/apply_vanta.py \
+            vanta-package/VANTA-PSP-final/scripts/apply_vanta.py \
             upstream
 
           echo ""
-          echo "Patch VANTA aplicado."
+          echo "VANTA aplicado."
 
-          grep -n "VANTA PSP" \
-            upstream/android/res/values/strings.xml \
-            || true
-
-      - name: Verify ARM64 configuration
+      - name: Verify source integration
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Verificando configuração ARM64..."
+          echo "Verificando package..."
 
-          grep -n \
+          grep -q \
+            'applicationId = "com.vantapsp.emulator"' \
+            upstream/android/build.gradle.kts
+
+          echo "Package OK."
+
+          echo "Verificando ARM64..."
+
+          grep -q \
             'abiFilters.add("arm64-v8a")' \
             upstream/android/build.gradle.kts
 
-          echo "ARM64 configurado corretamente."
+          echo "ARM64 OK."
 
-      - name: Build optimized ARM64 APK
+          echo "Verificando launcher VANTA..."
+
+          grep -q \
+            'android:name=".VantaActivity"' \
+            upstream/android/AndroidManifest.xml
+
+          echo "Launcher OK."
+
+          echo "Verificando interface VANTA..."
+
+          test -f \
+            upstream/android/src/org/ppsspp/ppsspp/VantaActivity.java
+
+          test -f \
+            upstream/android/src/org/ppsspp/ppsspp/VantaPrefs.java
+
+          echo "Interface OK."
+
+          echo "Verificando ponte Java -> Native..."
+
+          grep -q \
+            'vantaSetBootConfig' \
+            upstream/android/src/org/ppsspp/ppsspp/NativeApp.java
+
+          grep -q \
+            'vantaSetBootConfig' \
+            upstream/android/jni/app-android.cpp
+
+          echo "JNI OK."
+
+          echo "Verificando aplicação do perfil ao core..."
+
+          grep -q \
+            'g_Config.iInternalResolution' \
+            upstream/android/jni/app-android.cpp
+
+          grep -q \
+            'g_Config.iFrameSkip' \
+            upstream/android/jni/app-android.cpp
+
+          grep -q \
+            'g_Config.bFastMemory' \
+            upstream/android/jni/app-android.cpp
+
+          echo "Core profile bridge OK."
+
+          echo "Verificando remoção das configurações PPSSPP do fluxo VANTA..."
+
+          grep -q \
+            'VANTA: core settings live in the VANTA shell' \
+            upstream/UI/PauseScreen.cpp
+
+          echo "Pause flow OK."
+
+          echo ""
+          echo "TODAS AS VERIFICAÇÕES DE INTEGRAÇÃO PASSARAM."
+
+      - name: Build VANTA Unified ARM64 APK
         shell: bash
         working-directory: upstream
         env:
@@ -178,32 +267,27 @@ jobs:
           ./gradlew --version
 
           echo ""
-          echo "Iniciando compilação VANTA..."
+          echo "Compilando VANTA ${VANTA_VERSION_NAME}..."
 
           ./gradlew \
             :android:assembleNormalOptimized \
+            -PANDROID_VERSION_CODE=${VANTA_VERSION_CODE} \
+            -PANDROID_VERSION_NAME=${VANTA_VERSION_NAME} \
             --no-daemon \
             --stacktrace
 
-      - name: Locate generated APK
+      - name: Locate VANTA APK
         shell: bash
         run: |
           set -euo pipefail
 
-          echo "Procurando APK..."
+          echo "APKs gerados:"
 
           find upstream/android/build/outputs \
             -type f \
             -name "*.apk" \
             -print \
             || true
-
-      - name: Collect APK
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mkdir -p dist
 
           APK="$(find upstream/android/build/outputs/apk \
             -type f \
@@ -215,42 +299,89 @@ jobs:
 
           if [ -z "$APK" ]; then
             echo ""
-            echo "ERRO: APK optimized não encontrado."
-            echo ""
-
-            find upstream/android/build/outputs \
-              -type f \
-              -print \
-              || true
-
+            echo "ERRO: APK normalOptimized não encontrado."
             exit 1
           fi
 
-          echo "APK encontrado:"
+          echo ""
+          echo "APK:"
           echo "$APK"
+
+          echo "$APK" > /tmp/vanta_apk_path
+
+      - name: Validate compiled APK identity
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK="$(cat /tmp/vanta_apk_path)"
+
+          AAPT="$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt"
+
+          if [ ! -x "$AAPT" ]; then
+            echo "ERRO: aapt não encontrado."
+            exit 1
+          fi
+
+          echo "Inspecionando APK final..."
+
+          "$AAPT" dump badging "$APK" \
+            > /tmp/vanta_badging.txt
+
+          cat /tmp/vanta_badging.txt \
+            | head -n 20
+
+          echo ""
+          echo "Verificando package final..."
+
+          grep -q \
+            "package: name='com.vantapsp.emulator'" \
+            /tmp/vanta_badging.txt
+
+          echo "Package final OK."
+
+          echo "Verificando launcher final..."
+
+          grep -q \
+            "launchable-activity: name='org.ppsspp.ppsspp.VantaActivity'" \
+            /tmp/vanta_badging.txt
+
+          echo "Launcher VANTA final OK."
+
+          echo ""
+          echo "APK VALIDADO."
+
+      - name: Package final APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APK="$(cat /tmp/vanta_apk_path)"
+
+          mkdir -p dist
 
           cp \
             "$APK" \
-            dist/VANTA-PSP-arm64.apk
+            dist/VANTA-PSP-Unified-arm64.apk
 
           sha256sum \
-            dist/VANTA-PSP-arm64.apk \
-            > dist/VANTA-PSP-arm64.apk.sha256
+            dist/VANTA-PSP-Unified-arm64.apk \
+            > dist/VANTA-PSP-Unified-arm64.apk.sha256
 
           echo ""
           echo "SHA-256:"
-          cat dist/VANTA-PSP-arm64.apk.sha256
+          cat dist/VANTA-PSP-Unified-arm64.apk.sha256
 
           echo ""
-          echo "Tamanho:"
-          ls -lh dist/VANTA-PSP-arm64.apk
+          echo "Arquivo final:"
+          ls -lh dist/VANTA-PSP-Unified-arm64.apk
 
-      - name: Upload VANTA APK
+      - name: Upload VANTA Unified APK
         uses: actions/upload-artifact@v7
         with:
-          name: VANTA-PSP-arm64
+          name: VANTA-PSP-Unified-arm64
           path: |
-            dist/VANTA-PSP-arm64.apk
-            dist/VANTA-PSP-arm64.apk.sha256
+            dist/VANTA-PSP-Unified-arm64.apk
+            dist/VANTA-PSP-Unified-arm64.apk.sha256
           if-no-files-found: error
           retention-days: 14
