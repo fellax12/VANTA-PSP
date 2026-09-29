@@ -11,8 +11,8 @@ env:
   ANDROID_SDK_ROOT: "/usr/local/lib/android/sdk"
   ANDROID_HOME: "/usr/local/lib/android/sdk"
   ANDROID_NDK_VERSION: "29.0.14206865"
-  VANTA_VERSION_CODE: "120040103"
-  VANTA_VERSION_NAME: "0.9.3-r4"
+  VANTA_VERSION_CODE: "120040104"
+  VANTA_VERSION_NAME: "0.9.4-r5"
 
 jobs:
   android-arm64:
