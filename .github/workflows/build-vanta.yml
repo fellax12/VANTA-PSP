@@ -106,6 +106,7 @@ jobs:
           unzip -q "VANTA-PSP-final.zip" -d vanta-package
 
           echo "Conteúdo VANTA:"
+
           find vanta-package \
             -maxdepth 10 \
             -type f \
@@ -184,6 +185,7 @@ jobs:
 
           echo "Package OK."
 
+          echo ""
           echo "Verificando ARM64..."
 
           grep -q \
@@ -192,6 +194,7 @@ jobs:
 
           echo "ARM64 OK."
 
+          echo ""
           echo "Verificando launcher VANTA..."
 
           grep -q \
@@ -200,6 +203,7 @@ jobs:
 
           echo "Launcher OK."
 
+          echo ""
           echo "Verificando interface VANTA..."
 
           test -f \
@@ -210,6 +214,7 @@ jobs:
 
           echo "Interface OK."
 
+          echo ""
           echo "Verificando ponte Java -> Native..."
 
           grep -q \
@@ -222,6 +227,7 @@ jobs:
 
           echo "JNI OK."
 
+          echo ""
           echo "Verificando aplicação do perfil ao core..."
 
           grep -q \
@@ -236,15 +242,36 @@ jobs:
             'g_Config.bFastMemory' \
             upstream/android/jni/app-android.cpp
 
+          grep -q \
+            'g_Config.bHardwareTransform' \
+            upstream/android/jni/app-android.cpp
+
           echo "Core profile bridge OK."
 
-          echo "Verificando remoção das configurações PPSSPP do fluxo VANTA..."
+          echo ""
+          echo "Verificando VANTA Quick Tune..."
 
           grep -q \
-            'VANTA: core settings live in the VANTA shell' \
+            'VANTA: native quick-tune menu replaces the generic PPSSPP settings entry.' \
             upstream/UI/PauseScreen.cpp
 
-          echo "Pause flow OK."
+          grep -q \
+            'VANTA QUICK TUNE' \
+            upstream/UI/PauseScreen.cpp
+
+          grep -q \
+            'g_Config.iInternalResolution' \
+            upstream/UI/PauseScreen.cpp
+
+          grep -q \
+            'g_Config.iFrameSkip' \
+            upstream/UI/PauseScreen.cpp
+
+          grep -q \
+            'g_Config.bAutoFrameSkip' \
+            upstream/UI/PauseScreen.cpp
+
+          echo "VANTA Quick Tune OK."
 
           echo ""
           echo "TODAS AS VERIFICAÇÕES DE INTEGRAÇÃO PASSARAM."
@@ -304,7 +331,7 @@ jobs:
           fi
 
           echo ""
-          echo "APK:"
+          echo "APK encontrado:"
           echo "$APK"
 
           echo "$APK" > /tmp/vanta_apk_path
@@ -328,8 +355,7 @@ jobs:
           "$AAPT" dump badging "$APK" \
             > /tmp/vanta_badging.txt
 
-          cat /tmp/vanta_badging.txt \
-            | head -n 20
+          head -n 20 /tmp/vanta_badging.txt
 
           echo ""
           echo "Verificando package final..."
@@ -340,6 +366,7 @@ jobs:
 
           echo "Package final OK."
 
+          echo ""
           echo "Verificando launcher final..."
 
           grep -q \
@@ -347,6 +374,15 @@ jobs:
             /tmp/vanta_badging.txt
 
           echo "Launcher VANTA final OK."
+
+          echo ""
+          echo "Verificando versão..."
+
+          grep -q \
+            "versionName='${VANTA_VERSION_NAME}'" \
+            /tmp/vanta_badging.txt
+
+          echo "Versão ${VANTA_VERSION_NAME} OK."
 
           echo ""
           echo "APK VALIDADO."
