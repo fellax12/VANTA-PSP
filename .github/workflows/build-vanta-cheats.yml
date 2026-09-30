@@ -1,4 +1,4 @@
-name: Build VANTA PSP Cheats R1
+name: Build VANTA PSP Memory Scanner R2
 
 on:
   workflow_dispatch:
@@ -11,12 +11,12 @@ env:
   ANDROID_SDK_ROOT: "/usr/local/lib/android/sdk"
   ANDROID_HOME: "/usr/local/lib/android/sdk"
   ANDROID_NDK_VERSION: "29.0.14206865"
-  VANTA_VERSION_CODE: "120040106"
-  VANTA_VERSION_NAME: "0.9.6-cheats-r1"
+  VANTA_VERSION_CODE: "120040107"
+  VANTA_VERSION_NAME: "0.9.7-memory-r2"
 
 jobs:
   android-arm64:
-    name: VANTA Cheats R1 ARM64
+    name: VANTA Memory Scanner R2 ARM64
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -35,20 +35,15 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
-
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-
           if [ ! -f "$SDKMANAGER" ]; then
             SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
           fi
-
           if [ -z "$SDKMANAGER" ] || [ ! -f "$SDKMANAGER" ]; then
             echo "ERRO: sdkmanager nao encontrado."
             exit 1
           fi
-
           yes | "$SDKMANAGER" --licenses >/dev/null || true
-
           "$SDKMANAGER" \
             "platform-tools" \
             "platforms;android-36" \
@@ -56,38 +51,32 @@ jobs:
             "ndk;${ANDROID_NDK_VERSION}" \
             "cmake;3.22.1"
 
-      - name: Verify VANTA source package
+      - name: Verify all VANTA inputs
         shell: bash
         run: |
           set -euo pipefail
-
-          test -f "VANTA-PSP-final.zip"
-          unzip -t "VANTA-PSP-final.zip"
-
-          test -f "apply_vanta_cheats.py"
-          python3 -m py_compile "apply_vanta_cheats.py"
+          test -f VANTA-PSP-final.zip
+          unzip -t VANTA-PSP-final.zip
+          test -f apply_vanta_cheats.py
+          test -f apply_vanta_scanner_r2.py
+          python3 -m py_compile apply_vanta_cheats.py apply_vanta_scanner_r2.py
 
       - name: Extract VANTA source layer
         shell: bash
         run: |
           set -euo pipefail
-
           rm -rf vanta-package
           mkdir -p vanta-package
+          unzip -q VANTA-PSP-final.zip -d vanta-package
+          test -f vanta-package/VANTA-PSP-final/scripts/apply_vanta.py
+          test -f vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaActivity.java
+          test -f vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaPrefs.java
+          python3 -m py_compile vanta-package/VANTA-PSP-final/scripts/apply_vanta.py
 
-          unzip -q "VANTA-PSP-final.zip" -d vanta-package
-
-          test -f "vanta-package/VANTA-PSP-final/scripts/apply_vanta.py"
-          test -f "vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaActivity.java"
-          test -f "vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaPrefs.java"
-
-          python3 -m py_compile "vanta-package/VANTA-PSP-final/scripts/apply_vanta.py"
-
-      - name: Fetch PPSSPP engine
+      - name: Fetch pinned PPSSPP engine
         shell: bash
         run: |
           set -euo pipefail
-
           git clone \
             --branch "$PPSSPP_TAG" \
             --depth 1 \
@@ -95,60 +84,57 @@ jobs:
             --shallow-submodules \
             https://github.com/hrydgard/ppsspp.git \
             upstream
-
           git -C upstream submodule update --init --recursive --depth 1
 
       - name: Apply VANTA Unified layer
         shell: bash
         run: |
           set -euo pipefail
-
           python3 vanta-package/VANTA-PSP-final/scripts/apply_vanta.py upstream
 
-      - name: Apply VANTA Cheat Engine R1
+      - name: Apply existing VANTA Cheat Engine R1
         shell: bash
         run: |
           set -euo pipefail
-
           python3 apply_vanta_cheats.py upstream
 
-      - name: Verify VANTA integration
+      - name: Apply native VANTA Memory Scanner R2
         shell: bash
         run: |
           set -euo pipefail
+          python3 apply_vanta_scanner_r2.py upstream
 
+      - name: Verify VANTA native integration
+        shell: bash
+        run: |
+          set -euo pipefail
           grep -q 'applicationId = "com.vantapsp.emulator"' upstream/android/build.gradle.kts
           grep -q 'abiFilters.add("arm64-v8a")' upstream/android/build.gradle.kts
           grep -q 'android:name=".VantaActivity"' upstream/android/AndroidManifest.xml
-
           test -f upstream/android/src/org/ppsspp/ppsspp/VantaActivity.java
           test -f upstream/android/src/org/ppsspp/ppsspp/VantaPrefs.java
-
           grep -q 'vantaSetBootConfig' upstream/android/src/org/ppsspp/ppsspp/NativeApp.java
           grep -q 'vantaSetBootConfig' upstream/android/jni/app-android.cpp
           grep -q 'VANTA QUICK TUNE' upstream/UI/PauseScreen.cpp
-
-          grep -q 'VANTA_CHEAT_ENGINE_R1' upstream/UI/CwCheatScreen.cpp
-          grep -q 'VANTA_BUILTIN_ULES00390_R1' upstream/UI/CwCheatScreen.cpp
-          grep -q '0x205ED688 0x3B9AC9FF' upstream/UI/CwCheatScreen.cpp
-          grep -q '0x205ED68C 0x3B9AC9FF' upstream/UI/CwCheatScreen.cpp
           grep -q 'VANTA CHEATS' upstream/UI/PauseScreen.cpp
+          grep -q 'VANTA_CHEAT_ENGINE_R1' upstream/UI/CwCheatScreen.cpp
+          grep -q 'VANTA_MEMORY_SCANNER_R2' upstream/UI/CwCheatScreen.cpp
+          grep -q 'VantaBeginUnknown' upstream/UI/CwCheatScreen.cpp
+          grep -q 'VantaNextScan' upstream/UI/CwCheatScreen.cpp
+          grep -q 'VantaWrite' upstream/UI/CwCheatScreen.cpp
+          grep -q 'VANTA_R2_' upstream/UI/CwCheatScreen.cpp
+          echo "Native VANTA Memory Scanner R2 source hooks verified."
 
-          echo "VANTA Unified + Cheat Engine R1 verificados."
-
-      - name: Build VANTA Cheats R1 ARM64 APK
+      - name: Build VANTA Memory Scanner R2 ARM64 APK
         shell: bash
         working-directory: upstream
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8"
         run: |
           set -euo pipefail
-
           chmod +x gradlew
-
           java -version
           ./gradlew --version
-
           ./gradlew \
             :android:assembleNormalOptimized \
             -PANDROID_VERSION_CODE=${VANTA_VERSION_CODE} \
@@ -160,15 +146,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$(find upstream/android/build/outputs/apk -type f -name '*.apk' | grep -i normal | grep -i optimized | head -n 1 || true)"
-
           if [ -z "$APK" ]; then
             echo "ERRO: APK normalOptimized nao encontrado."
             find upstream/android/build/outputs -type f -name '*.apk' -print || true
             exit 1
           fi
-
           echo "$APK" > /tmp/vanta_apk_path
           echo "APK: $APK"
 
@@ -176,12 +159,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$(cat /tmp/vanta_apk_path)"
           AAPT="$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt"
-
           "$AAPT" dump badging "$APK" > /tmp/vanta_badging.txt
-
           grep -q "package: name='com.vantapsp.emulator'" /tmp/vanta_badging.txt
           grep -q "launchable-activity: name='org.ppsspp.ppsspp.VantaActivity'" /tmp/vanta_badging.txt
           grep -q "versionName='${VANTA_VERSION_NAME}'" /tmp/vanta_badging.txt
@@ -190,25 +170,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           APK="$(cat /tmp/vanta_apk_path)"
-
           mkdir -p dist
+          cp "$APK" dist/VANTA-PSP-Memory-Scanner-R2-arm64.apk
+          sha256sum dist/VANTA-PSP-Memory-Scanner-R2-arm64.apk > dist/VANTA-PSP-Memory-Scanner-R2-arm64.apk.sha256
+          ls -lh dist/VANTA-PSP-Memory-Scanner-R2-arm64.apk
+          cat dist/VANTA-PSP-Memory-Scanner-R2-arm64.apk.sha256
 
-          cp "$APK" dist/VANTA-PSP-Cheats-R1-arm64.apk
-
-          sha256sum dist/VANTA-PSP-Cheats-R1-arm64.apk \
-            > dist/VANTA-PSP-Cheats-R1-arm64.apk.sha256
-
-          ls -lh dist/VANTA-PSP-Cheats-R1-arm64.apk
-          cat dist/VANTA-PSP-Cheats-R1-arm64.apk.sha256
-
-      - name: Upload VANTA Cheats R1 APK
+      - name: Upload VANTA Memory Scanner R2 APK
         uses: actions/upload-artifact@v7
         with:
-          name: VANTA-PSP-Cheats-R1-arm64
+          name: VANTA-PSP-Memory-Scanner-R2-arm64
           path: |
-            dist/VANTA-PSP-Cheats-R1-arm64.apk
-            dist/VANTA-PSP-Cheats-R1-arm64.apk.sha256
+            dist/VANTA-PSP-Memory-Scanner-R2-arm64.apk
+            dist/VANTA-PSP-Memory-Scanner-R2-arm64.apk.sha256
           if-no-files-found: error
           retention-days: 14
+          
