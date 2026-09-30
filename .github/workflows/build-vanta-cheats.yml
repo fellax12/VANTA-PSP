@@ -35,15 +35,20 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
+
           SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+
           if [ ! -f "$SDKMANAGER" ]; then
             SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
           fi
+
           if [ -z "$SDKMANAGER" ] || [ ! -f "$SDKMANAGER" ]; then
             echo "ERRO: sdkmanager nao encontrado."
             exit 1
           fi
+
           yes | "$SDKMANAGER" --licenses >/dev/null || true
+
           "$SDKMANAGER" \
             "platform-tools" \
             "platforms;android-36" \
@@ -55,27 +60,34 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           test -f "VANTA-PSP-final.zip"
           unzip -t "VANTA-PSP-final.zip"
-          test -f "vanta-cheats/apply_vanta_cheats.py"
-          python3 -m py_compile "vanta-cheats/apply_vanta_cheats.py"
+
+          test -f "apply_vanta_cheats.py"
+          python3 -m py_compile "apply_vanta_cheats.py"
 
       - name: Extract VANTA source layer
         shell: bash
         run: |
           set -euo pipefail
+
           rm -rf vanta-package
           mkdir -p vanta-package
+
           unzip -q "VANTA-PSP-final.zip" -d vanta-package
+
           test -f "vanta-package/VANTA-PSP-final/scripts/apply_vanta.py"
           test -f "vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaActivity.java"
           test -f "vanta-package/VANTA-PSP-final/overlay/android/src/org/ppsspp/ppsspp/VantaPrefs.java"
+
           python3 -m py_compile "vanta-package/VANTA-PSP-final/scripts/apply_vanta.py"
 
       - name: Fetch PPSSPP engine
         shell: bash
         run: |
           set -euo pipefail
+
           git clone \
             --branch "$PPSSPP_TAG" \
             --depth 1 \
@@ -83,19 +95,22 @@ jobs:
             --shallow-submodules \
             https://github.com/hrydgard/ppsspp.git \
             upstream
+
           git -C upstream submodule update --init --recursive --depth 1
 
       - name: Apply VANTA Unified layer
         shell: bash
         run: |
           set -euo pipefail
+
           python3 vanta-package/VANTA-PSP-final/scripts/apply_vanta.py upstream
 
       - name: Apply VANTA Cheat Engine R1
         shell: bash
         run: |
           set -euo pipefail
-          python3 vanta-cheats/apply_vanta_cheats.py upstream
+
+          python3 apply_vanta_cheats.py upstream
 
       - name: Verify VANTA integration
         shell: bash
@@ -105,8 +120,10 @@ jobs:
           grep -q 'applicationId = "com.vantapsp.emulator"' upstream/android/build.gradle.kts
           grep -q 'abiFilters.add("arm64-v8a")' upstream/android/build.gradle.kts
           grep -q 'android:name=".VantaActivity"' upstream/android/AndroidManifest.xml
+
           test -f upstream/android/src/org/ppsspp/ppsspp/VantaActivity.java
           test -f upstream/android/src/org/ppsspp/ppsspp/VantaPrefs.java
+
           grep -q 'vantaSetBootConfig' upstream/android/src/org/ppsspp/ppsspp/NativeApp.java
           grep -q 'vantaSetBootConfig' upstream/android/jni/app-android.cpp
           grep -q 'VANTA QUICK TUNE' upstream/UI/PauseScreen.cpp
@@ -126,9 +143,12 @@ jobs:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx6g -Dfile.encoding=UTF-8"
         run: |
           set -euo pipefail
+
           chmod +x gradlew
+
           java -version
           ./gradlew --version
+
           ./gradlew \
             :android:assembleNormalOptimized \
             -PANDROID_VERSION_CODE=${VANTA_VERSION_CODE} \
@@ -140,12 +160,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$(find upstream/android/build/outputs/apk -type f -name '*.apk' | grep -i normal | grep -i optimized | head -n 1 || true)"
+
           if [ -z "$APK" ]; then
             echo "ERRO: APK normalOptimized nao encontrado."
             find upstream/android/build/outputs -type f -name '*.apk' -print || true
             exit 1
           fi
+
           echo "$APK" > /tmp/vanta_apk_path
           echo "APK: $APK"
 
@@ -153,9 +176,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$(cat /tmp/vanta_apk_path)"
           AAPT="$ANDROID_SDK_ROOT/build-tools/36.0.0/aapt"
+
           "$AAPT" dump badging "$APK" > /tmp/vanta_badging.txt
+
           grep -q "package: name='com.vantapsp.emulator'" /tmp/vanta_badging.txt
           grep -q "launchable-activity: name='org.ppsspp.ppsspp.VantaActivity'" /tmp/vanta_badging.txt
           grep -q "versionName='${VANTA_VERSION_NAME}'" /tmp/vanta_badging.txt
@@ -164,10 +190,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           APK="$(cat /tmp/vanta_apk_path)"
+
           mkdir -p dist
+
           cp "$APK" dist/VANTA-PSP-Cheats-R1-arm64.apk
-          sha256sum dist/VANTA-PSP-Cheats-R1-arm64.apk > dist/VANTA-PSP-Cheats-R1-arm64.apk.sha256
+
+          sha256sum dist/VANTA-PSP-Cheats-R1-arm64.apk \
+            > dist/VANTA-PSP-Cheats-R1-arm64.apk.sha256
+
           ls -lh dist/VANTA-PSP-Cheats-R1-arm64.apk
           cat dist/VANTA-PSP-Cheats-R1-arm64.apk.sha256
 
