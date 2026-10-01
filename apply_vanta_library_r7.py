@@ -460,4 +460,53 @@ def patch_activity(path: Path):
     if len(dispatch_params) != 1:
         raise RuntimeError(f"dispatchKeyEvent expected 1 parameter, found {dispatch_params}")
     if len(motion_params) != 1:
-        raise RuntimeError(f"onGenericMotionEvent expecte
+        raise RuntimeError(f"onGenericMotionEvent expected 1 parameter, found {motion_params}")
+    if len(result_params) < 3:
+        raise RuntimeError(f"onActivityResult expected at least 3 parameters, found {result_params}")
+
+    dispatch_code = DISPATCH_START.replace("event", dispatch_params[0])
+    motion_code = MOTION_START.replace("event", motion_params[0])
+    result_code = (RESULT_START
+        .replace("requestCode", result_params[0])
+        .replace("resultCode", result_params[1])
+        .replace("data", result_params[2]))
+
+    src = inject_method_start(src, "dispatchKeyEvent", dispatch_code)
+    src = inject_method_start(src, "onGenericMotionEvent", motion_code)
+    src = inject_method_start(src, "onActivityResult", result_code)
+    src = inject_method_end(src, "renderLibrary", RENDER_END)
+    src = append_before_class_end(src, "VantaActivity", ACTIVITY_HELPERS)
+    path.write_text(src, encoding="utf-8")
+    print("[ok] VantaActivity controller navigation + covers")
+
+
+def patch_prefs(path: Path):
+    src = path.read_text(encoding="utf-8")
+    if "static String coverUri(" in src:
+        print("[skip] VantaPrefs already has cover metadata")
+        return
+    if "class VantaPrefs" not in src or "SharedPreferences" not in src:
+        raise RuntimeError("Unexpected VantaPrefs source")
+    src = append_before_class_end(src, "VantaPrefs", PREFS_HELPERS)
+    path.write_text(src, encoding="utf-8")
+    print("[ok] VantaPrefs cover metadata")
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("usage: apply_vanta_library_r7.py <ppsspp-root>", file=sys.stderr)
+        return 2
+    root = Path(sys.argv[1]).resolve()
+    activity = root / "android/src/org/ppsspp/ppsspp/VantaActivity.java"
+    prefs = root / "android/src/org/ppsspp/ppsspp/VantaPrefs.java"
+    if not activity.is_file() or not prefs.is_file():
+        raise RuntimeError("VANTA launcher files not found; apply base VANTA layer first")
+    patch_activity(activity)
+    patch_prefs(prefs)
+    print("[ok] VANTA Library UI R7.1 hotfix applied without touching scanner/core files")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+
