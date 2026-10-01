@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""VANTA PSP UI R7
+"""VANTA PSP UI R7.1 hotfix
 
 Adds controller-first launcher navigation and persistent manual game covers.
 Designed to run AFTER the stable VANTA layer and Memory Scanner R2 patches.
@@ -80,6 +80,26 @@ def find_method(src: str, name: str):
     open_pos = src.find("{", m.start(), m.end())
     close_pos = matching_brace(src, open_pos)
     return m.start(), open_pos, close_pos, src[m.start():open_pos]
+
+
+def method_parameter_names(src: str, name: str):
+    """Return parameter variable names exactly as declared by the Java method."""
+    _, _, _, decl = find_method(src, name)
+    p0 = decl.find("(")
+    p1 = decl.rfind(")")
+    if p0 < 0 or p1 < p0:
+        raise RuntimeError(f"method {name} parameter list not recognized")
+    raw = decl[p0 + 1:p1].strip()
+    if not raw:
+        return []
+    parts = [part.strip() for part in raw.split(",") if part.strip()]
+    names = []
+    for part in parts:
+        ids = re.findall(r"[A-Za-z_$][\w$]*", part)
+        if not ids:
+            raise RuntimeError(f"method {name} parameter not recognized: {part!r}")
+        names.append(ids[-1])
+    return names
 
 
 def inject_method_start(src: str, name: str, code: str) -> str:
@@ -433,41 +453,11 @@ def patch_activity(path: Path):
     op = class_body_open(src, "VantaActivity")
     src = src[:op + 1] + "\n" + ACTIVITY_FIELDS.rstrip() + "\n" + src[op + 1:]
     src = patch_game_tile_return(src)
-    src = inject_method_start(src, "dispatchKeyEvent", DISPATCH_START)
-    src = inject_method_start(src, "onGenericMotionEvent", MOTION_START)
-    src = inject_method_start(src, "onActivityResult", RESULT_START)
-    src = inject_method_end(src, "renderLibrary", RENDER_END)
-    src = append_before_class_end(src, "VantaActivity", ACTIVITY_HELPERS)
-    path.write_text(src, encoding="utf-8")
-    print("[ok] VantaActivity controller navigation + covers")
 
-
-def patch_prefs(path: Path):
-    src = path.read_text(encoding="utf-8")
-    if "static String coverUri(" in src:
-        print("[skip] VantaPrefs already has cover metadata")
-        return
-    if "class VantaPrefs" not in src or "SharedPreferences" not in src:
-        raise RuntimeError("Unexpected VantaPrefs source")
-    src = append_before_class_end(src, "VantaPrefs", PREFS_HELPERS)
-    path.write_text(src, encoding="utf-8")
-    print("[ok] VantaPrefs cover metadata")
-
-
-def main() -> int:
-    if len(sys.argv) != 2:
-        print("usage: apply_vanta_library_r7.py <ppsspp-root>", file=sys.stderr)
-        return 2
-    root = Path(sys.argv[1]).resolve()
-    activity = root / "android/src/org/ppsspp/ppsspp/VantaActivity.java"
-    prefs = root / "android/src/org/ppsspp/ppsspp/VantaPrefs.java"
-    if not activity.is_file() or not prefs.is_file():
-        raise RuntimeError("VANTA launcher files not found; apply base VANTA layer first")
-    patch_activity(activity)
-    patch_prefs(prefs)
-    print("[ok] VANTA Library UI R7 applied without touching scanner/core files")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    dispatch_params = method_parameter_names(src, "dispatchKeyEvent")
+    motion_params = method_parameter_names(src, "onGenericMotionEvent")
+    result_params = method_parameter_names(src, "onActivityResult")
+    if len(dispatch_params) != 1:
+        raise RuntimeError(f"dispatchKeyEvent expected 1 parameter, found {dispatch_params}")
+    if len(motion_params) != 1:
+        raise RuntimeError(f"onGenericMotionEvent expecte
